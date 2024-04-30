@@ -1,10 +1,4 @@
-#include <algorithm>
-#include <iostream>
-#include <random>
-
-#include <cassert>
-#include <cmath>
-#include <cstdlib>
+#include "cmdline.h"
 
 double third(double A, double B) {
 	return A*A/(1.0 - A*B);
@@ -35,16 +29,31 @@ std::discrete_distribution<int> make_seed3(double A, double B, double C, double 
 	        c, cd, d};
 }
 
-int main(int argc, char *argv[]) {
-	if (argc != 5) {
-		std::cerr << "Usage: " << argv[0] << " EDGECOUNT SCALE2 SCALE3 SCALE5" << std::endl;
-		return EXIT_FAILURE;
-	}
-	size_t m  = strtoll(argv[1], nullptr, 0);
-	size_t s2 = strtoll(argv[2], nullptr, 0);
-	size_t s3 = strtoll(argv[3], nullptr, 0);
-	size_t s5 = strtoll(argv[4], nullptr, 0);
 
+int main(int argc, char *argv[]) {
+	std::ofstream outf;
+	bool START_AT_INDEX_1 = false;
+	size_t m = 0, s2 = 0, s3 = 0, s5 = 0, num_vertices = 0; //num_vertices is only used for optargs
+
+	CmdLineBase cmd(argc, argv);
+	if (!cmd.parse_args()) {
+		cmd.print_help();
+		std::exit(1);
+	}
+	m = cmd.get_num_edges();
+	// std::cout <<"m= " << m << "\n";
+
+	s2 = cmd.get_scale_factor();
+	num_vertices = pow(2, s2);
+	// std::cout << "s2= " << s2 << "; num_vertices="<<num_vertices<<"\n";
+
+	s3 = cmd.get_scale3();
+	s5 = cmd.get_scale5();
+	//std::cout << "(s3,s5)=" << s3 << " "<<s5<< "\n";
+	openFileToWrite(outf, cmd.get_outfile().c_str());
+	START_AT_INDEX_1 = cmd.get_start_at_1();
+	std::cout << "START_AT_INDEX_1= " << START_AT_INDEX_1 << "\n";
+	
 	//double A=9./16, B=3./16,C=B, D=1./16;	// GRAPH500 "pure" 75/25 bilinear map
 	double A=.57, B=.19, C=B, D=.05;	// GRAPH500	l = ??, m = 16*2^l
 	//double A=.42, B=.19, C=B, D=.20;	// CAHepPh	l = 14, m = 237010
@@ -74,9 +83,15 @@ int main(int argc, char *argv[]) {
 	std::fill(sequence.begin() + s2, sequence.begin() + s2 + s3, usecase::use3);
 	std::fill(sequence.begin() + s2 + s3, sequence.end(), usecase::use5);
 
-	for (size_t m_i = 0; m_i != m; ++m_i) {
-		size_t row = 0;
-		size_t col = 0;
+	std::unordered_set <std::string> edge_set;
+	size_t num_collisions = 0;
+
+	for (size_t m_i = 0; m_i != m; ) {
+		size_t row=0, col=0;
+		if(START_AT_INDEX_1 == true){
+			row = 1;
+			col = 1;
+		}
 		size_t base = 1;
 
 		std::shuffle(sequence.begin(), sequence.end(), g);
@@ -104,6 +119,32 @@ int main(int argc, char *argv[]) {
 		assert(col < base);
 		assert(base == size_t(pow(2,s2)*pow(3,s3)*pow(5,s5)));
 		
-		printf("%zu\t%zu\n", row, col);
+		std::string key = std::to_string(row) + "->" + std::to_string(col);
+		if (edge_set.find(key) == edge_set.end()) {	
+			// Only increment the edge counter if we found a previously unseen edge
+			outf << row << " " << col << "\n";
+			outf.flush();
+			// printf("%lu %lu\n", row, col);
+			edge_set.insert(key);
+			++m_i;
+		} else {
+			++num_collisions;
+		}
 	}
+	std::cerr << "Num colisions= " << num_collisions << "\n";
+	outf.close();
 }
+
+
+/**
+ * 		size_t row, col;
+		if (START_AT_INDEX_1 == true){
+			row = 1;
+			col = 1;
+		}
+		else{
+			row = 0;
+			col = 0;
+		}
+ * 
+ */
